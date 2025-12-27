@@ -3,6 +3,7 @@ import React from "react";
 import { useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -79,7 +80,7 @@ export default function LoginPage() {
               style={{
                 display: "block",
                 fontSize: "14px",
-                fontWeight: "medium",
+                fontWeight: "500",
                 color: "#374151",
                 marginBottom: "4px",
               }}
@@ -97,8 +98,9 @@ export default function LoginPage() {
                 display: "block",
                 width: "100%",
                 padding: "8px 12px",
-                border: "1px solid#d1d5db",
+                border: "1px solid #d1d5db",
                 borderRadius: "6px",
+                color: "black",
               }}
             />
           </div>
@@ -108,7 +110,7 @@ export default function LoginPage() {
               style={{
                 display: "block",
                 fontSize: "14px",
-                fontWeight: "medium",
+                fontWeight: "500",
                 color: "#374151",
                 marginBottom: "4px",
               }}
@@ -128,6 +130,7 @@ export default function LoginPage() {
                 padding: "8px 12px",
                 border: "1px solid #d1d5db",
                 borderRadius: "6px",
+                color: "black",
               }}
             />
           </div>
@@ -153,15 +156,31 @@ export default function LoginPage() {
                 border: "none",
                 borderRadius: "6px",
                 cursor: "pointer",
+                fontWeight: "bold",
               }}
             >
               Sign in
             </button>
           </div>
         </form>
+
+        {/* Naya Signup Link Section */}
+        <div style={{ 
+          marginTop: "20px", 
+          textAlign: "center", 
+          fontSize: "14px", 
+          color: "#6b7280" 
+        }}>
+          Don't have an account?{" "}
+          <Link href="/signup" style={{ 
+            color: "#4f46e5", 
+            fontWeight: "bold", 
+            textDecoration: "none" 
+          }}>
+            Sign up here
+          </Link>
+        </div>
       </div>
     </main>
   );
-  
-
 }

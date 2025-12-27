@@ -48,6 +48,19 @@ def create_test_user(session: Session = Depends(get_session)):
     session.commit()
     return {"message": "Test user created!", "email": "test@example.com", "password": "password123"}
 
+@app.post("/signup")
+def signup(user: models.User, session: Session = Depends(get_session)):
+    # Check karein ke email pehle se to nahi hai
+    statement = select(models.User).where(models.User.email == user.email)
+    existing_user = session.exec(statement).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return {"message": "User created successfully", "user": user}
+
 # --- TASK CRUD OPERATIONS (Updated to use 'Task' instead of 'Todo') ---
 @app.get("/todos", response_model=List[models.Task])
 def read_tasks(session: Session = Depends(get_session)):
