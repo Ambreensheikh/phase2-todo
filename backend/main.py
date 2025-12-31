@@ -7,14 +7,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
-from db import create_db_and_tables, get_session
-
-from models.user import User
-from models.task import Task
-from models.conversation import Conversation
-from models.message import Message
-
-from api.v1.chat import router as chat_router # Import the new chat router
+from backend.db import create_db_and_tables, get_session
+from backend.models.user import User
+from backend.models.task import Task
+from backend.models.conversation import Conversation
+from backend.models.message import Message
+from backend.api.v1.chat import router as chat_router # Import the new chat router
 
 app = FastAPI()
 
