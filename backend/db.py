@@ -1,5 +1,5 @@
 import os
-from sqlmodel import create_engine, SQLModel
+from sqlmodel import create_engine, SQLModel, Session
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -12,5 +12,18 @@ if not DATABASE_URL:
 
 engine = create_engine(DATABASE_URL)
 
+# Import all models to ensure SQLModel.metadata has registered them
+import models.user
+import models.task
+import models.conversation
+import models.message
+
+
+
+
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
+
+def get_session():
+    with Session(engine) as session:
+        yield session
