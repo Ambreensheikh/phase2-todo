@@ -1,20 +1,27 @@
+import sys
+import os
+
+# Add the project root to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
-from db import create_db_and_tables, engine
-import models
-from typing import List
+from db import create_db_and_tables, get_session
+
+from models.user import User
+from models.task import Task
+from models.conversation import Conversation
+from models.message import Message
+
+from api.v1.chat import router as chat_router # Import the new chat router
 
 app = FastAPI()
 
 # --- CORS Configuration ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "https://phase2-todo-git-main-ambreen-sheikhs-projects.vercel.app"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -24,68 +31,21 @@ app.add_middleware(
 def on_startup():
     create_db_and_tables()
 
-def get_session():
-    with Session(engine) as session:
-        yield session
+@app.get("/")
+def read_root():
+    return {"Hello": "Todo AI Chatbot Backend is Live!"}
 
-# --- AUTHENTICATION (Login) ---
-@app.post("/token")
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
-    user = session.exec(select(models.User).where(models.User.email == form_data.username)).first()
-    # Check for 'hashed_password' as defined in your models.py
-    if not user or form_data.password != user.hashed_password:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    return {"access_token": user.email, "token_type": "bearer"}
+# Include the chat router
+app.include_router(chat_router, prefix="/api/v1/chat")
 
-# --- TEST USER CREATION ---
+# This will be used for testing, can be removed later
 @app.post("/create-test-user")
 def create_test_user(session: Session = Depends(get_session)):
-    existing_user = session.exec(select(models.User).where(models.User.email == "test@example.com")).first()
+    existing_user = session.exec(select(User).where(User.email == "test@example.com")).first()
     if existing_user:
-        return {"message": "User already exists"}
-    
-    # Matching your model fields: email, name, hashed_password
-    new_user = models.User(email="test@example.com", name="Test User", hashed_password="password123")
+        return {"message": "Test user already exists"}
+
+    new_user = User(email="test@example.com", name="Test User", hashed_password="password123")
     session.add(new_user)
     session.commit()
     return {"message": "Test user created!", "email": "test@example.com", "password": "password123"}
-
-@app.post("/signup")
-def signup(user: models.User, session: Session = Depends(get_session)):
-    # Check karein ke email pehle se to nahi hai
-    statement = select(models.User).where(models.User.email == user.email)
-    existing_user = session.exec(statement).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    return {"message": "User created successfully", "user": user}
-
-# --- TASK CRUD OPERATIONS (Updated to use 'Task' instead of 'Todo') ---
-@app.get("/todos", response_model=List[models.Task])
-def read_tasks(session: Session = Depends(get_session)):
-    tasks = session.exec(select(models.Task)).all()
-    return tasks
-
-@app.post("/todos", response_model=models.Task)
-def create_task(task: models.Task, session: Session = Depends(get_session)):
-    session.add(task)
-    session.commit()
-    session.refresh(task)
-    return task
-
-@app.delete("/todos/{task_id}")
-def delete_task(task_id: int, session: Session = Depends(get_session)):
-    task = session.get(models.Task, task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    session.delete(task)
-    session.commit()
-    return {"ok": True}
-
-@app.get("/")
-def read_root():
-    return {"Hello": "Hackathon Task App is Live!"}
