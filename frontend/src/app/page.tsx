@@ -17,7 +17,7 @@ export default function Page() {
     setMessages(p => [...p, { sender: "user", text: input }]);
     const currentInput = input; setInput("");
     try {
-      const res = await fetch("http://127.0.0.1:8005/api/v1/chat", {
+      const res = await fetch("http://localhost:8005/api/v1/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
