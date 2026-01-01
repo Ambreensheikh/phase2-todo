@@ -19,7 +19,7 @@ app = FastAPI()
 # --- CORS Configuration ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,7 +34,7 @@ def read_root():
     return {"Hello": "Todo AI Chatbot Backend is Live!"}
 
 # Include the chat router
-app.include_router(chat_router, prefix="/api/v1/chat")
+app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
 
 # This will be used for testing, can be removed later
 @app.post("/create-test-user")
