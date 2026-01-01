@@ -23,6 +23,7 @@ router = APIRouter()
 
 
 class ChatRequest(BaseModel):
+    user_id: Optional[str] = None
     conversation_id: Optional[int] = None
     message: str
 
@@ -34,10 +35,18 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(user_id: str, request: ChatRequest, session: Session = Depends(get_session)):
+async def chat_endpoint(request: ChatRequest, session: Session = Depends(get_session)):
+    user_id = request.user_id or "guest@taskflow.ai"
+    
     user = session.exec(select(User).where(User.email == user_id)).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        if user_id == "guest@taskflow.ai":
+            user = User(email=user_id, name="Guest User", hashed_password="") # Create guest user
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
 
     conversation: Conversation
     if request.conversation_id:
