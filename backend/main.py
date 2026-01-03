@@ -12,14 +12,15 @@ from backend.models.user import User
 from backend.models.task import Task
 from backend.models.conversation import Conversation
 from backend.models.message import Message
-from backend.api.v1.chat import router as chat_router # Import the new chat router
+from backend.api.v1.chat import router as chat_router
+from backend.api.v1.tasks import router as tasks_router
 
 app = FastAPI()
 
 # --- CORS Configuration ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,8 +34,9 @@ def on_startup():
 def read_root():
     return {"Hello": "Todo AI Chatbot Backend is Live!"}
 
-# Include the chat router
+# Include the chat and tasks routers
 app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
+app.include_router(tasks_router, prefix="/api/v1/tasks", tags=["Tasks"])
 
 # This will be used for testing, can be removed later
 @app.post("/create-test-user")

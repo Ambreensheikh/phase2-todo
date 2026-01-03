@@ -98,16 +98,21 @@ export default function Page() {
             <div className="bg-[#3D1425] p-4 font-black text-center border-b border-white/10 tracking-widest uppercase italic text-sm shadow-lg">Todo AI Command</div>
             <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-black/20">
               {messages.map((m, i) => (
-                <div key={i} className={`flex ${m.sender === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`p-4 rounded-[1.5rem] text-xs font-bold shadow-xl ${m.sender === "user" ? "bg-[#F472B6] text-white" : "bg-white/10 text-white/90"}`}>{m.text}</div>
-                </div>
+                m.text && m.text.trim() && (
+                  <div key={i} className={`flex ${m.sender === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`p-4 rounded-[1.5rem] text-xs font-bold shadow-xl ${m.sender === "user" ? "bg-[#F472B6] text-white" : "bg-white/10 text-white/90"}`}>{m.text}</div>
+                  </div>
+                )
               ))}
             </div>
-            <div className="p-4 bg-black/40 flex gap-2 border-t border-white/10">
-              <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSend()} placeholder="Type mission..." 
-                className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-xs text-white placeholder-white/20 outline-none focus:ring-1 focus:ring-[#F472B6]" 
-              />
-              <button onClick={handleSend} className="bg-[#F472B6] p-2 rounded-full shadow-[0_0_15px_#F472B6]"><Power size={18}/></button>
+            <div className="p-4 bg-black/40 flex gap-2 border-t border-white/10 flex-col">
+              <p className="text-white/50 text-xs text-center mb-2">Talk to the agent naturally to update your dashboard.</p>
+              <div className="flex gap-2 w-full">
+                <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSend()} placeholder="What is your mission today? (e.g. Buy milk, Finish project)" 
+                  className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-xs text-white placeholder-white/20 outline-none focus:ring-1 focus:ring-[#F472B6]" 
+                />
+                <button onClick={handleSend} className="bg-[#F472B6] p-2 rounded-full shadow-[0_0_15px_#F472B6]"><Power size={18}/></button>
+              </div>
             </div>
           </motion.div>
         )}

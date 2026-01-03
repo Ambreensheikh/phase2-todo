@@ -13,10 +13,10 @@ if not DATABASE_URL:
 engine = create_engine(DATABASE_URL)
 
 # Import all models to ensure SQLModel.metadata has registered them
-import models.user
-import models.task
-import models.conversation
-import models.message
+from backend.models.user import User
+from backend.models.task import Task
+from backend.models.conversation import Conversation
+from backend.models.message import Message
 
 
 
