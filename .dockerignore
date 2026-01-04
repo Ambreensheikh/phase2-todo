@@ -1,0 +1,24 @@
+# Node.js
+node_modules
+.next
+
+# Python
+.venv
+__pycache__
+*.pyc
+
+# Environment files
+.env
+*.env.*
+*.env.local
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile*
+
+# IDE specific
+.idea
+.vscode

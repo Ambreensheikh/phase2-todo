@@ -17,11 +17,15 @@ def get_tasks_endpoint(
     """
     Get all tasks from the database, ignoring user_id.
     """
-    query = select(Task)
-    if completed is not None:
-        query = query.where(Task.completed == completed)
-    tasks = session.exec(query).all()
-    return [task.model_dump() for task in tasks]
+    try:
+        query = select(Task)
+        if completed is not None:
+            query = query.where(Task.completed == completed)
+        tasks = session.exec(query).all()
+        return [task.model_dump() for task in tasks]
+    except Exception as e:
+        print(f"Error fetching tasks from database: {e}")
+        return []
 
 @router.delete("/{task_id}", response_model=Dict[str, Any])
 def delete_task_endpoint(

@@ -116,7 +116,7 @@ async def chat_endpoint(request: ChatRequest, session: Session = Depends(get_ses
                     "tool_call_id": tool_call.id,
                     "role": "tool",
                     "name": function_name,
-                    "content": json.dumps(tool_result_obj.model_dump()),
+                    "content": json.dumps(tool_result_obj.model_dump(mode='json')),
                 })
 
             # --- 6. API CALL (2nd): Send tool result back to get final response ---
