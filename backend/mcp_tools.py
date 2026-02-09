@@ -1,8 +1,8 @@
 from sqlmodel import Session, select
 from typing import List, Optional, Dict, Any
 
-from backend.models.task import Task
-from backend.models.user import User
+from models.task import Task
+from models.user import User
 
 
 def create_task(session: Session, user_id: str, title: str, description: Optional[str] = None) -> Task:

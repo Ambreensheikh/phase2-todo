@@ -1,56 +1,64 @@
-# MCP Tools Specification
+from sqlmodel import Session, select
+from backend.models.user import User
+from backend.models.task import Task
+from fastapi import HTTPException
 
-The MCP server must expose the following tools for the AI agent:
+def get_user_by_email(session: Session, email: str):
+    user = session.exec(select(User).where(User.email == email)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {email} not found")
+    return user
 
-## Tool: add_task
+# 1. ADD TASK
+def create_task(session: Session, user_id: str, title: str, description: str = None):
+    user = get_user_by_email(session, user_id)
+    new_task = Task(title=title, description=description, user_id=user.id)
+    session.add(new_task)
+    # Note: Commit chat.py mein endpoint handle kar raha hai
+    return new_task
 
-- **Purpose**: Create a new task
-- **Parameters**:
-    - `user_id` (string, required)
-    - `title` (string, required)
-    - `description` (string, optional)
-- **Returns**: `task_id`, `status`, `title`
-- **Example Input**: `{"user_id": "ziakhan", "title": "Buy groceries", "description": "Milk, eggs, bread"}`
-- **Example Output**: `{"task_id": 5, "status": "created", "title": "Buy groceries"}`
+# 2. LIST TASKS
+def list_tasks(session: Session, user_id: str, status: str = "all"):
+    user = get_user_by_email(session, user_id)
+    statement = select(Task).where(Task.user_id == user.id)
+    
+    if status == "pending":
+        statement = statement.where(Task.completed == False)
+    elif status == "completed":
+        statement = statement.where(Task.completed == True)
+        
+    return session.exec(statement).all()
 
-## Tool: list_tasks
+# 3. COMPLETE TASK
+def complete_task(session: Session, user_id: str, task_id: int):
+    user = get_user_by_email(session, user_id)
+    task = session.exec(select(Task).where(Task.id == task_id, Task.user_id == user.id)).first()
+    
+    if task:
+        task.completed = True
+        session.add(task)
+        return {"task_id": task.id, "status": "completed", "title": task.title}
+    return {"error": "Task not found"}
 
-- **Purpose**: Retrieve tasks from the list
-- **Parameters**:
-    - `user_id` (string, required)
-    - `status` (string, optional: "all", "pending", "completed")
-- **Returns**: Array of task objects
-- **Example Input**: `{"user_id": "ziakhan", "status": "pending"}`
-- **Example Output**: `[{"id": 1, "title": "Buy groceries", "completed": false}, ...]`
+# 4. DELETE TASK
+def delete_task(session: Session, user_id: str, task_id: int):
+    user = get_user_by_email(session, user_id)
+    task = session.exec(select(Task).where(Task.id == task_id, Task.user_id == user.id)).first()
+    
+    if task:
+        title = task.title
+        session.delete(task)
+        return {"task_id": task_id, "status": "deleted", "title": title}
+    return {"error": "Task not found"}
 
-## Tool: complete_task
-
-- **Purpose**: Mark a task as complete
-- **Parameters**:
-    - `user_id` (string, required)
-    - `task_id` (integer, required)
-- **Returns**: `task_id`, `status`, `title`
-- **Example Input**: `{"user_id": "ziakhan", "task_id": 3}`
-- **Example Output**: `{"task_id": 3, "status": "completed", "title": "Call mom"}`
-
-## Tool: delete_task
-
-- **Purpose**: Remove a task from the list
-- **Parameters**:
-    - `user_id` (string, required)
-    - `task_id` (integer, required)
-- **Returns**: `task_id`, `status`, `title`
-- **Example Input**: `{"user_id": "ziakhan", "task_id": 2}`
-- **Example Output**: `{"task_id": 2, "status": "deleted", "title": "Old task"}`
-
-## Tool: update_task
-
-- **Purpose**: Modify task title or description
-- **Parameters**:
-    - `user_id` (string, required)
-    - `task_id` (integer, required)
-    - `title` (string, optional)
-    - `description` (string, optional)
-- **Returns**: `task_id`, `status`, `title`
-- **Example Input**: `{"user_id": "ziakhan", "task_id": 1, "title": "Buy groceries and fruits"}`
-- **Example Output**: `{"task_id": 1, "status": "updated", "title": "Buy groceries and fruits"}`
+# 5. UPDATE TASK
+def update_task(session: Session, user_id: str, task_id: int, title: str = None, description: str = None):
+    user = get_user_by_email(session, user_id)
+    task = session.exec(select(Task).where(Task.id == task_id, Task.user_id == user.id)).first()
+    
+    if task:
+        if title: task.title = title
+        if description: task.description = description
+        session.add(task)
+        return {"task_id": task.id, "status": "updated", "title": task.title}
+    return {"error": "Task not found"}

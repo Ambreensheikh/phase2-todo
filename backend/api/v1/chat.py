@@ -1,140 +1,105 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
-from typing import List, Optional
-from datetime import datetime
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
-import os
 import json
+import os
 import traceback
+import google.generativeai as genai
+from openai import AsyncOpenAI
 
-from openai import AsyncOpenAI, AuthenticationError
-from dotenv import load_dotenv
-
-from backend.models.user import User
-from backend.models.conversation import Conversation
-from backend.models.message import Message
-from backend.db import get_session
-from backend import mcp_tools
-
-# Load environment variables
-load_dotenv(override=True)
-
-# Add masked print statement to verify loaded API key
-print(f'ACTUAL KEY LOADED: {os.getenv("OPENAI_API_KEY")[:10]}...')
-
+from models.user import User
+from models.conversation import Conversation
+from models.message import Message
+from models.task import Task 
+from db import get_session
 
 router = APIRouter()
 
-
+# --- Pydantic Models ---
 class ChatRequest(BaseModel):
+    message: str
     user_id: Optional[str] = None
     conversation_id: Optional[int] = None
-    message: str
-
 
 class ChatResponse(BaseModel):
     conversation_id: int
     response: str
-    tool_calls: List[dict]
+    tool_calls: Optional[List[Dict[str, Any]]] = None
 
+# --- AI Clients Setup ---
+
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+print(f"DEBUG: My Gemini Key is: {os.environ.get('GEMINI_API_KEY')}")
+openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+gemini_model = genai.GenerativeModel('gemini-1.5-flash')
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest, session: Session = Depends(get_session)):
-    """
-    Handles the entire chat conversation, including tool calls for task creation.
-    """
     try:
-        # --- 1. SETUP: API Client, User, Conversation ---
-        client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-        user_id_email = request.user_id or "guest@taskflow.ai"
-        
-        user = session.exec(select(User).where(User.email == user_id_email)).first()
+        # 1. USER & CONVERSATION SETUP
+        user_email = request.user_id or "guest@taskflow.ai"
+        user = session.exec(select(User).where(User.email == user_email)).first()
         if not user:
-            user = User(email=user_id_email, name="Guest User", hashed_password="")
+            user = User(email=user_email, name="Agent User", password="no-password")
             session.add(user)
             session.commit()
             session.refresh(user)
 
-        conversation: Conversation
         if request.conversation_id:
-            conversation = session.exec(select(Conversation).where(Conversation.id == request.conversation_id, Conversation.user_id == user.id)).first()
-            if not conversation:
-                raise HTTPException(status_code=404, detail="Conversation not found.")
+            conversation = session.exec(select(Conversation).where(Conversation.id == request.conversation_id)).first()
         else:
             conversation = Conversation(user_id=user.id)
             session.add(conversation)
             session.commit()
             session.refresh(conversation)
 
-        # --- 2. HISTORY: Save user message and build message list for API ---
-        user_message = Message(conversation_id=conversation.id, user_id=user.id, role="user", content=request.message)
-        session.add(user_message)
-        session.commit()
+        # 2. TASK AUTOMATION CHECK (Keyword Detection)
+        user_input = request.message.lower()
+        tool_calls_data = []
+        final_response = ""
+
+        if any(word in user_input for word in ["add", "create", "todo"]):
+            task_title = request.message.replace("add", "").replace("create", "").replace("task", "").strip()
+            new_task = Task(title=task_title or "New Mission", user_id=user_email, completed=False)
+            session.add(new_task)
+            session.commit()
+            tool_calls_data.append({"name": "add_task", "arguments": {"task_description": task_title}})
+            final_response = f"✅ Mission Logged: '{task_title}' has been added to your dashboard."
         
-        db_messages = session.exec(select(Message).where(Message.conversation_id == conversation.id).order_by(Message.created_at)).all()
-        messages_for_api = [{"role": msg.role, "content": msg.content} for msg in db_messages if msg.content]
-
-        # --- 3. TOOLS: Define tools for the model ---
-        tools = [{
-            "type": "function",
-            "function": {
-                "name": "create_task",
-                "description": "Creates a new task in the user's to-do list.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "title": {"type": "string", "description": "The title of the task."},
-                        "description": {"type": "string", "description": "The description of the task."},
-                    },
-                    "required": ["title"],
-                },
-            },
-        }]
-
-        # --- 4. API CALL (1st): Get initial model response ---
-        response = await client.chat.completions.create(model="gpt-4-turbo-preview", messages=messages_for_api, tools=tools, tool_choice="auto")
-        response_message = response.choices[0].message
-        messages_for_api.append(response_message)  # Add response to history for next potential call
-
-        # --- 5. TOOL EXECUTION: If model requests a tool, execute it ---
-        if response_message.tool_calls:
-            for tool_call in response_message.tool_calls:
-                function_name = tool_call.function.name
-                function_to_call = getattr(mcp_tools, function_name)
-                function_args = json.loads(tool_call.function.arguments)
-                
-                # Call the tool function (which adds to session but does not commit)
-                tool_result_obj = function_to_call(session=session, user_id=user_id_email, **function_args)
-
-                # Explicitly commit and refresh here in the endpoint, as requested
-                session.commit()
-                session.refresh(tool_result_obj)
-                print(f'---> DATABASE SUCCESS: Task "{tool_result_obj.title}" saved with ID {tool_result_obj.id}')
-                
-                # Append the result for the second API call
-                messages_for_api.append({
-                    "tool_call_id": tool_call.id,
-                    "role": "tool",
-                    "name": function_name,
-                    "content": json.dumps(tool_result_obj.model_dump(mode='json')),
-                })
-
-            # --- 6. API CALL (2nd): Send tool result back to get final response ---
-            second_response = await client.chat.completions.create(model="gpt-4-turbo-preview", messages=messages_for_api)
-            final_content = second_response.choices[0].message.content
+        # 3. AI GENERATION (With Failover)
         else:
-            final_content = response_message.content
+            try:
+                # Pehle OpenAI Try Karein
+                print("🤖 Attempting OpenAI...")
+                oa_res = await openai_client.chat.completions.create(
+                    model="gpt-4o-mini", # Ya "gpt-3.5-turbo"
+                    messages=[{"role": "user", "content": request.message}],
+                    timeout=10.0 # Agar 10 sec mein jawab na aaye to skip
+                )
+                final_response = oa_res.choices[0].message.content
+                print("✅ OpenAI Success!")
+            except Exception as e:
+                # Agar OpenAI Fail ho jaye, to Gemini Try Karein
+                print(f"⚠️ OpenAI Failed: {e}. Switching to Gemini...")
+                try:
+                    gem_res = gemini_model.generate_content(request.message)
+                    final_response = gem_res.text
+                    print("✅ Gemini Failover Success!")
+                except Exception as ge:
+                    print(f"❌ Both APIs Failed: {ge}")
+                    final_response = "I'm having trouble connecting to my brain (APIs). Please check your internet or API keys."
 
-        # --- 7. SAVE & RETURN: Save final assistant message and return to user ---
-        assistant_message = Message(conversation_id=conversation.id, user_id=user.id, role="assistant", content=final_content)
-        session.add(assistant_message)
+        # 4. SAVE HISTORY & RETURN
+        user_msg = Message(conversation_id=conversation.id, user_id=user.id, role="user", content=request.message)
+        assistant_msg = Message(conversation_id=conversation.id, user_id=user.id, role="assistant", content=final_response)
+        session.add(user_msg)
+        session.add(assistant_msg)
         session.commit()
 
-        return ChatResponse(conversation_id=conversation.id, response=final_content, tool_calls=[])
+        return ChatResponse(conversation_id=conversation.id, response=final_response, tool_calls=tool_calls_data)
 
     except Exception as e:
-        print(f"--- CRITICAL ERROR IN /chat ENDPOINT ---")
-        print(traceback.format_exc())
-        print(f"------------------------------------")
-        raise HTTPException(status_code=500, detail="An internal server error occurred.")
-
+        print(f"❌ CRITICAL ERROR: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="System totally offline.")

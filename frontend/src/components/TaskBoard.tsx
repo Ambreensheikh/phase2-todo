@@ -24,7 +24,8 @@ const TaskBoard: React.FC = () => {
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${task.completed ? 'bg-[#F472B6] border-[#F472B6]' : 'border-white/30'}`}>
                   {task.completed && <Check size={14} />}
                 </div>
-                <span className={`ml-4 text-white/90 ${task.completed ? 'line-through text-white/50' : ''}`}>{task.text}</span>
+                {/* FIXED: task.text -> task.title */}
+                <span className={`ml-4 text-white/90 ${task.completed ? 'line-through text-white/50' : ''}`}>{task.title}</span>
               </div>
             </motion.div>
           ))

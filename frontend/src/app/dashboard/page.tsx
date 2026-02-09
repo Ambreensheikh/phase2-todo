@@ -1,8 +1,10 @@
 "use client";
+
 import React, { useState, useEffect } from 'react';
+import { useRouter } from "next/navigation";
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { CheckCircle, Zap, Shield, List, Home } from 'lucide-react';
+import { CheckCircle, List, Home } from 'lucide-react';
 
 // Define the type for a single task
 interface Task {
@@ -13,44 +15,59 @@ interface Task {
   created_at: string;
 }
 
-
 export default function DashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+
+  // 1. Auth Guard: Check for token
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      // Agar token nahi hai to foran login (root) par bhej do
+      router.push("/");
+    } else {
+      fetchTasks();
+    }
+  }, [router]);
 
   const fetchTasks = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('http://localhost:8005/api/v1/tasks');
+      setError(null);
+      
+      const userEmail = localStorage.getItem("token");
+      if (!userEmail) return;
+
+      // FIXED: URL updated to match backend main.py change (/api/v1/tasks)
+      const response = await fetch(`http://localhost:8005/api/v1/tasks/?user_id=${userEmail}`);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch tasks from the backend.');
+        throw new Error('Failed to fetch tasks.');
       }
       const data: Task[] = await response.json();
       setTasks(data);
     } catch (err: any) {
-      setError(err.message || 'An unknown error occurred while fetching tasks.');
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchTasks();
-  }, []);
-
   const handleDelete = async (task_id: number) => {
     try {
-      const response = await fetch(`http://localhost:8005/api/v1/tasks/${task_id}`, {
+      const userEmail = localStorage.getItem("token");
+      // FIXED: Added user_id param to delete request
+      const response = await fetch(`http://localhost:8005/api/v1/tasks/${task_id}?user_id=${userEmail}`, {
         method: 'DELETE',
       });
       if (!response.ok) {
-        throw new Error(`Failed to delete task ${task_id}.`);
+        throw new Error(`Failed to delete task.`);
       }
-      // Refetch tasks after successful deletion to update the UI
-      fetchTasks();
+      fetchTasks(); 
     } catch (err: any) {
-      setError(err.message || 'An unknown error occurred during deletion.');
+      setError(err.message);
     }
   };
 
@@ -69,32 +86,40 @@ export default function DashboardPage() {
             Mission Dashboard
           </h1>
         </div>
-        <Link href="/" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
-          <Home className="w-4 h-4" />
-          <span className="text-sm font-bold">Home</span>
-        </Link>
+        <div className="flex gap-4">
+            <Link href="/" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
+            <Home className="w-4 h-4" />
+            <span className="text-sm font-bold">Home</span>
+            </Link>
+            <button 
+                onClick={() => { localStorage.removeItem("token"); router.push("/"); }}
+                className="text-sm font-bold text-red-400 border border-red-400/30 px-4 py-2 rounded-lg hover:bg-red-400/10"
+            >
+                Logout
+            </button>
+        </div>
       </header>
 
       {/* Task List Container */}
-      <main className="w-full max-w-5xl z-10 bg-black/20 border border-white/10 rounded-[2rem] p-6 backdrop-blur-3xl">
+      <main className="w-full max-w-5xl z-10 bg-black/20 border border-white/10 rounded-4xl p-6 backdrop-blur-3xl">
         {isLoading && (
-          <div className="text-center text-pink-400 font-bold">Loading Missions...</div>
+          <div className="text-center text-pink-400 font-bold animate-pulse">Scanning Missions...</div>
         )}
         {error && (
-          <div className="text-center text-red-500 font-bold">
-            <p>Error loading tasks: {error}</p>
-            <p className="text-sm text-white/50 mt-2">Please ensure the backend server is running on port 8005.</p>
+          <div className="text-center text-red-500 font-bold p-4 bg-red-500/10 rounded-xl border border-red-500/20">
+            <p>Connection Error: {error}</p>
+            <p className="text-sm text-white/50 mt-2 italic">Tip: Ensure your FastAPI is running on port 8005</p>
           </div>
         )}
+        
         {!isLoading && !error && (
           <ul className="space-y-4">
             {tasks.length > 0 ? (
               tasks.map((task) => (
                 <motion.li
                   key={task.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
                   className={`flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10 ${task.completed ? 'opacity-50' : ''}`}
                 >
                   <div className="flex items-center gap-4">
@@ -110,29 +135,22 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-white/30 font-mono">
-                      ID: {task.id}
-                    </span>
-                    <button
-                      onClick={() => handleDelete(task.id)}
-                      className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded-md text-sm font-bold transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handleDelete(task.id)}
+                    className="px-3 py-1 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/30 rounded-md text-sm font-bold transition-all"
+                  >
+                    Abort
+                  </button>
                 </motion.li>
               ))
             ) : (
-              <div className="text-center text-white/50 font-bold">No missions found.</div>
+              <div className="text-center text-white/50 py-10">No active missions. Tell the AI to add one!</div>
             )}
           </ul>
         )}
-        {/* Add Task Button Container */}
+
         <div className="flex justify-end mt-6">
-            <Link href="/" className="px-3 py-1 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 rounded-md text-sm font-bold transition-all shadow-lg shadow-pink-500/20">
-                Add New Mission
-            </Link>
+            <button onClick={() => fetchTasks()} className="text-xs text-white/40 hover:text-white mr-4">Refresh Data</button>
         </div>
       </main>
     </div>

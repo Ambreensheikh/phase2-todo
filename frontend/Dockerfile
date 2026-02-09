@@ -1,35 +1,42 @@
-# Stage 1: Build the Next.js application
-FROM node:20-alpine AS builder
+# Stage 1: Builder
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package.json and package-lock.json
-COPY frontend/package*.json ./
+# Pehle dependencies install karein (Cache layer)
+# Note: Hum root se run kar rahe hain isliye 'frontend/' prefix use kiya
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci --legacy-peer-deps
 
-# Install dependencies
-RUN npm install --legacy-peer-deps
-
-# Copy the rest of the frontend application code
+# Baaki source code copy karein
 COPY frontend/ .
 
-# Build the application
+# Build banayein
+ENV NEXT_TELEMETRY_DISABLED 1
 RUN npm run build
 
-# Stage 2: Production image
-FROM node:20-alpine AS runner    
+# Stage 2: Runner (Lightweight & Fast)
+FROM node:18-alpine AS runner
 
 WORKDIR /app
 
-# Set production environment
-ENV NODE_ENV=production
+ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED 1
 
-# Copy built assets from the builder stage
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+# System user banayein security ke liye
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Sirf zaroori files copy karein (Standalone Mode)
 COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
 
 EXPOSE 3000
 
-# Command to start the application
-CMD ["npm", "start"]
+ENV PORT 3000
+
+# 'npm start' ki jagah direct node chalayenge (Super Fast)
+CMD ["node", "server.js"]
